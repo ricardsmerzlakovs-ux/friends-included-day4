@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Friends Included | Wedding Guests for Hire</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header>
+      <div><p class="eyebrow">Friends Included Ltd</p><h1>Wedding Guests for Hire</h1></div>
+      <label>Demonstration role <select id="role"><option>Richard</option><option>Anastasia</option><option>Jean-Claude</option><option>Kevin</option><option>Svetlana</option></select></label>
+    </header>
+    <main>
+      <section class="intro"><div><h2>Financial control, without awkward family questions.</h2><p>Record a sale or expense, approve decisions as Svetlana, and inspect the live financial result.</p></div><button id="load-tests" class="secondary">Load required Test 1 and Test 2 data</button></section>
+      <p id="notice" role="status"></p>
+      <section class="grid forms">
+        <form id="sale-form" class="card"><h2>New sale</h2><input name="reference" placeholder="Reference, e.g. S06" required><input name="customer" placeholder="Customer" required><select name="project"><option value="A">Project A — Respectable Relatives</option><option value="B">Project B — Drunk University Friends</option></select><textarea name="description" placeholder="Description" required></textarea><input name="amount" type="number" min="0.01" step="0.01" placeholder="Amount EUR" required><div class="split"><input name="richard" type="number" min="0" max="100" placeholder="Richard %" required><input name="anastasia" type="number" min="0" max="100" placeholder="Anastasia %" required><input name="jean" type="number" min="0" max="100" placeholder="Jean-Claude %" required></div><button>Save pending sale</button></form>
+        <form id="expense-form" class="card"><h2>New expense</h2><input name="reference" placeholder="Reference, e.g. E08" required><textarea name="description" placeholder="Description" required></textarea><select name="category"><option>Materials</option><option>Travel</option><option>Other</option></select><input name="amount" type="number" min="0.01" step="0.01" placeholder="Amount EUR" required><select name="allocation"><option value="A">Project A</option><option value="B">Project B</option><option value="overhead">Company overhead</option></select><button>Save expense</button></form>
+      </section>
+      <section class="dashboard"><div class="section-title"><h2>Financial dashboard</h2><button id="refresh" class="secondary">Refresh</button></div><div id="metrics" class="metrics"></div><div id="projects" class="grid"></div></section>
+      <section class="grid"><div class="card"><h2>Sales requiring approval</h2><div id="sales"></div></div><div class="card"><h2>Expenses requiring allocation</h2><div id="expenses"></div></div></section>
+      <section class="card"><h2>How to use this demonstration</h2><ol><li>Select your fictional employee role.</li><li>Salespeople submit sales; Kevin submits expenses.</li><li>Select Svetlana to approve or correct pending records.</li><li>Use the dashboard to verify project and company totals.</li></ol><p id="integration-status">Google Sheets and Telegram delivery statuses are shown on each record.</p></section>
+    </main>
+    <footer>Fictional demonstration for Day 4 homework. All monetary amounts are EUR.</footer>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,29 +1,95 @@
 const $ = (id) => document.getElementById(id);
-const state = { role: 'Richard', sales: [], expenses: [] };
 const API_URL = 'https://btyutrnvwhclnpjqduat.supabase.co/functions/v1/wedding-guests-api';
-const apiRole = { Richard:'manager', Anastasia:'sales', 'Jean-Claude':'assistant', Kevin:'accountant', Svetlana:'owner' };
+const state = { role: 'Richard', sales: [], expenses: [], totals: {} };
+const money = (value) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+const notice = (text) => { $('notice').textContent = text; };
+
 async function api(action, payload = {}) {
-  const response = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action, actor:apiRole[state.role], payload}) });
+  const response = await fetch(API_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, actor: state.role, payload })
+  });
   const result = await response.json();
   if (!response.ok || !result.ok) throw new Error(result.error || 'Server request failed.');
   return result;
 }
-const money = (n) => new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'}).format(Number(n||0));
-const notice = (text) => $('notice').textContent = text;
-function canSubmitSale(){return state.role==='Anastasia'}
-function canSubmitExpense(){return state.role==='Kevin'}
-function commissions(s){const pool=Math.round(Number(s.amount)*10)/100;const p={Richard:+s.richard,Anastasia:+s.anastasia,'Jean-Claude':+s.jean};const out={};let used=0;Object.entries(p).forEach(([name,pct])=>{out[name]=Math.round(pool*pct)/100;used+=out[name]});const winner=Object.entries(p).sort((a,b)=>b[1]-a[1]||['Richard','Anastasia','Jean-Claude'].indexOf(a[0])-['Richard','Anastasia','Jean-Claude'].indexOf(b[0]))[0][0];out[winner]=Math.round((out[winner]+pool-used)*100)/100;return {pool,out,p};}
-function totals(){const approved=state.sales.filter(s=>s.status==='Approved');const expenses=state.expenses;const revenue=approved.reduce((a,s)=>a+Number(s.amount),0);const commission=approved.reduce((a,s)=>a+commissions(s).pool,0);const cost=expenses.reduce((a,e)=>a+Number(e.amount),0);return {revenue,commission,cost,profit:revenue-commission-cost,orders:approved.length};}
-function projectTotals(project){const approved=state.sales.filter(s=>s.status==='Approved'&&s.project===project);const revenue=approved.reduce((a,s)=>a+Number(s.amount),0);const commission=approved.reduce((a,s)=>a+commissions(s).pool,0);const expenses=state.expenses.filter(e=>e.finalAllocation===project).reduce((a,e)=>a+Number(e.amount),0);return {revenue,commission,expenses,result:revenue-commission-expenses};}
-function recordSale(s){const c=commissions(s);return `<div class="record"><div class="record-head"><span>${s.reference} · ${money(s.amount)}</span><span class="tag ${s.status==='Pending approval'?'warn':''}">${s.status}</span></div><div class="meta">${s.salesperson} · Project ${s.project} · ${s.customer}</div><div class="meta">Proposed split: R ${s.richard}% / A ${s.anastasia}% / J ${s.jean}% · Sheet: ${s.sheetStatus||'Sync pending'} · Telegram: ${s.telegramStatus||'No Telegram recipient linked'}</div>${state.role==='Svetlana'&&s.status==='Pending approval'?`<div class="actions"><button onclick="approveSale('${s.reference}')">Approve proposed split</button><button class="secondary" onclick="correctSale('${s.reference}')">Correct split</button></div>`:''}</div>`}
-function recordExpense(e){return `<div class="record"><div class="record-head"><span>${e.reference} · ${money(e.amount)}</span><span class="tag ${e.status==='Awaiting allocation'?'warn':''}">${e.status}</span></div><div class="meta">${e.reporter} · ${e.category} · Proposed: ${e.proposedAllocation}</div><div class="meta">${e.description} · Sheet: ${e.sheetStatus||'Sync pending'} · Telegram: ${e.telegramStatus||'No Telegram recipient linked'}</div>${state.role==='Svetlana'&&e.status==='Awaiting allocation'?`<div class="actions"><button onclick="approveExpense('${e.reference}','${e.proposedAllocation}')">Confirm allocation</button><button class="secondary" onclick="correctExpense('${e.reference}')">Change allocation</button></div>`:''}</div>`}
-function render(){const t=totals();$('metrics').innerHTML=[['Approved income',t.revenue],['Commission expense',t.commission],['Recorded expenses',t.cost],['Company result',t.profit],['Approved sales',t.orders]].map(([n,v])=>`<div class="metric"><span>${n}</span><strong>${typeof v==='number'&&n!=='Approved sales'?money(v):v}</strong></div>`).join('');$('projects').innerHTML=['A','B'].map(p=>{const t=projectTotals(p);return `<div class="card project"><h2>Project ${p}</h2><p class="meta">Approved income ${money(t.revenue)} · commissions ${money(t.commission)} · expenses ${money(t.expenses)}</p><strong>Result: ${money(t.result)}</strong></div>`}).join('');$('sales').innerHTML=state.sales.length?state.sales.map(recordSale).join(''):'<p class="meta">No sales recorded.</p>';$('expenses').innerHTML=state.expenses.length?state.expenses.map(recordExpense).join(''):'<p class="meta">No expenses recorded.</p>';const saleOK=canSubmitSale(), expenseOK=canSubmitExpense();$('sale-form').querySelector('button').disabled=!saleOK;$('expense-form').querySelector('button').disabled=!expenseOK;}
-window.approveSale=(ref)=>{const s=state.sales.find(x=>x.reference===ref);s.status='Approved';s.sheetStatus='Sync pending';s.telegramStatus='Notification pending';notice(`${ref} approved. Commission pool calculated automatically.`);render()};
-window.correctSale=(ref)=>{const s=state.sales.find(x=>x.reference===ref);const split=prompt('Final split: Richard, Anastasia, Jean-Claude (must total 100)',`${s.richard},${s.anastasia},${s.jean}`);if(!split)return;const [r,a,j]=split.split(',').map(Number);if(r+a+j!==100||[r,a,j].some(n=>n<0)){notice('Split must contain non-negative values that total 100.');return}s.richard=r;s.anastasia=a;s.jean=j;s.status='Approved';s.sheetStatus='Sync pending';s.telegramStatus='Notification pending';notice(`${ref} corrected and approved.`);render()};
-window.approveExpense=(ref,allocation)=>{const e=state.expenses.find(x=>x.reference===ref);e.finalAllocation=allocation;e.status='Allocated';e.sheetStatus='Sync pending';e.telegramStatus='Notification pending';notice(`${ref} allocation confirmed.`);render()};
-window.correctExpense=(ref)=>{const e=state.expenses.find(x=>x.reference===ref);const allocation=prompt('Final allocation: A, B, or overhead',e.proposedAllocation);if(!['A','B','overhead'].includes(allocation))return notice('Use A, B, or overhead.');e.finalAllocation=allocation;e.status='Allocated';e.sheetStatus='Sync pending';e.telegramStatus='Notification pending';notice(`${ref} allocation corrected.`);render()};
-$('role').addEventListener('change',e=>{state.role=e.target.value;notice(`Role changed to ${state.role}.`);render()});
-$('sale-form').addEventListener('submit',async e=>{e.preventDefault();if(!canSubmitSale())return notice('Only Anastasia may submit sales.');const d=Object.fromEntries(new FormData(e.target));if(+d.richard + +d.anastasia + +d.jean!==100)return notice('Commission shares must total 100%.');if(state.sales.some(s=>s.reference===d.reference)||state.expenses.some(x=>x.reference===d.reference))return notice('Duplicate reference refused.');try{await api('sale',{client_name:d.customer,event_name:`Project ${d.project}`,amount:+d.amount,sales_person:'Anastasia',assistant_name:'Jean-Claude',notes:d.description});state.sales.push({...d,amount:+d.amount,salesperson:state.role,status:'Pending approval',sheetStatus:'Saved to Supabase'});e.target.reset();notice(`${d.reference} saved to Supabase.`);render()}catch(err){notice(`Server error: ${err.message}`)}});
-$('expense-form').addEventListener('submit',async e=>{e.preventDefault();if(!canSubmitExpense())return notice('Only Kevin may submit expenses.');const d=Object.fromEntries(new FormData(e.target));if(state.sales.some(s=>s.reference===d.reference)||state.expenses.some(x=>x.reference===d.reference))return notice('Duplicate reference refused.');try{await api('expense',{description:d.description,category:d.category,amount:+d.amount,submitted_by:'Kevin',notes:`Reference ${d.reference}; allocation ${d.allocation}`});const overhead=d.allocation==='overhead';state.expenses.push({...d,amount:+d.amount,reporter:'Kevin',proposedAllocation:d.allocation,finalAllocation:overhead?'overhead':null,status:overhead?'Allocated':'Awaiting allocation',sheetStatus:'Saved to Supabase'});e.target.reset();notice(`${d.reference} saved to Supabase.`);render()}catch(err){notice(`Server error: ${err.message}`)}});
-$('load-tests').addEventListener('click',()=>{state.sales=[{reference:'S01',salesperson:'Richard',customer:'Olivia Rose',project:'A',description:'One proud uncle and an emotional grandmother',amount:1000,richard:50,anastasia:30,jean:20,status:'Approved'},{reference:'S02',salesperson:'Anastasia',customer:'Daniel King',project:'B',description:'University friends, dancing, and stripping performance',amount:2000,richard:20,anastasia:40,jean:40,status:'Approved'},{reference:'S03',salesperson:'Jean-Claude',customer:'Emma Stonebridge',project:'A',description:'Premium relatives including surgeon uncle',amount:1500,richard:20,anastasia:30,jean:50,status:'Approved'},{reference:'S04',salesperson:'Richard',customer:'Lucas Green',project:'B',description:'Small group of loud university friends',amount:800,richard:25,anastasia:25,jean:50,status:'Approved'},{reference:'S05',salesperson:'Richard',customer:'Mia Brooks',project:'B',description:'Extra guests and embarrassing speech',amount:600,richard:100,anastasia:0,jean:0,status:'Pending approval'}];state.expenses=[{reference:'E01',reporter:'Kevin',description:'Rented suit and fake pearl necklace',category:'Materials',amount:120,proposedAllocation:'A',finalAllocation:'A',status:'Allocated'},{reference:'E02',reporter:'Kevin',description:'Taxi for the grandmother',category:'Travel',amount:80,proposedAllocation:'B',finalAllocation:'A',status:'Allocated'},{reference:'E03',reporter:'Kevin',description:'Monthly company website subscription',category:'Other',amount:100,proposedAllocation:'overhead',finalAllocation:'overhead',status:'Allocated'},{reference:'E04',reporter:'Kevin',description:'Replacement costumes',category:'Materials',amount:250,proposedAllocation:'B',finalAllocation:'B',status:'Allocated'},{reference:'E05',reporter:'Kevin',description:'Minibus for university friends',category:'Travel',amount:90,proposedAllocation:'A',finalAllocation:'B',status:'Allocated'},{reference:'E06',reporter:'Kevin',description:'Company telephone subscription',category:'Other',amount:60,proposedAllocation:'overhead',finalAllocation:'overhead',status:'Allocated'},{reference:'E07',reporter:'Kevin',description:'Emergency replacement clothing',category:'Materials',amount:140,proposedAllocation:'A',finalAllocation:null,status:'Awaiting allocation'}];notice('Required Test 1 and Test 2 records loaded for demonstration.');render()});
-$('refresh').addEventListener('click',render);render();
+
+async function loadState() {
+  const result = await api('state');
+  state.sales = result.sales || [];
+  state.expenses = result.expenses || [];
+  state.totals = result.totals || {};
+  render();
+}
+
+const isSalesperson = () => ['Richard', 'Anastasia', 'Jean-Claude'].includes(state.role);
+const isManager = () => state.role === 'Svetlana';
+
+function saleRecord(s) {
+  const pending = s.status !== 'Approved';
+  const controls = isManager() && pending
+    ? '<div class="actions"><button onclick="approveSale(\'' + s.reference + '\',' + s.proposed_r + ',' + s.proposed_a + ',' + s.proposed_j + ')">Approve proposed split</button><button class="secondary" onclick="correctSale(\'' + s.reference + '\',' + s.proposed_r + ',' + s.proposed_a + ',' + s.proposed_j + ')">Correct split</button></div>' : '';
+  const final = s.status === 'Approved' ? '<div class="meta">Final commission: Richard ' + money(s.commission_r) + ' · Anastasia ' + money(s.commission_a) + ' · Jean-Claude ' + money(s.commission_j) + '</div>' : '';
+  return '<div class="record"><div class="record-head"><span>' + s.reference + ' · ' + money(s.amount) + '</span><span class="tag ' + (pending ? 'warn' : '') + '">' + s.status + '</span></div><div class="meta">' + s.salesperson + ' · Project ' + s.project + ' · ' + s.customer + '</div><div class="meta">Proposed: R ' + s.proposed_r + '% / A ' + s.proposed_a + '% / J ' + s.proposed_j + '% · Sheet: ' + (s.sheet_status || 'Pending') + '</div>' + final + controls + '</div>';
+}
+
+function expenseRecord(e) {
+  const pending = e.status === 'Awaiting allocation';
+  const controls = isManager() && pending
+    ? '<div class="actions"><button onclick="approveExpense(\'' + e.reference + '\',\'' + e.proposed_allocation + '\')">Confirm allocation</button><button class="secondary" onclick="correctExpense(\'' + e.reference + '\',\'' + e.proposed_allocation + '\')">Change allocation</button></div>' : '';
+  const final = e.final_allocation ? '<div class="meta">Final allocation: ' + e.final_allocation + '</div>' : '';
+  return '<div class="record"><div class="record-head"><span>' + e.reference + ' · ' + money(e.amount) + '</span><span class="tag ' + (pending ? 'warn' : '') + '">' + e.status + '</span></div><div class="meta">' + e.reporter + ' · ' + e.category + ' · Proposed: ' + e.proposed_allocation + '</div><div class="meta">' + e.description + ' · Sheet: ' + (e.sheet_status || 'Pending') + '</div>' + final + controls + '</div>';
+}
+
+function render() {
+  const t = state.totals;
+  const metrics = [['Company result', t.company_result], ['Project A result', t.project_a_result], ['Project B result', t.project_b_result], ['Richard commission', t.richard_commission], ['Anastasia commission', t.anastasia_commission], ['Jean-Claude commission', t.jean_claude_commission]];
+  $('metrics').innerHTML = metrics.map((x) => '<div class="metric"><span>' + x[0] + '</span><strong>' + money(x[1]) + '</strong></div>').join('');
+  $('projects').innerHTML = '<div class="card project"><h2>Project A</h2><strong>Result: ' + money(t.project_a_result) + '</strong></div><div class="card project"><h2>Project B</h2><strong>Result: ' + money(t.project_b_result) + '</strong></div>';
+  $('sales').innerHTML = state.sales.length ? state.sales.map(saleRecord).join('') : '<p class="meta">No sales recorded.</p>';
+  $('expenses').innerHTML = state.expenses.length ? state.expenses.map(expenseRecord).join('') : '<p class="meta">No expenses recorded.</p>';
+  $('sale-form').querySelector('button').disabled = !isSalesperson();
+  $('expense-form').querySelector('button').disabled = state.role !== 'Kevin';
+}
+
+window.approveSale = async (reference, richard, anastasia, jean) => {
+  try { await api('approve_sale', { reference, richard, anastasia, jean }); notice(reference + ' approved.'); await loadState(); }
+  catch (error) { notice('Server error: ' + error.message); }
+};
+window.correctSale = async (reference, r, a, j) => {
+  const answer = prompt('Final split: Richard, Anastasia, Jean-Claude. Total must equal 100.', r + ',' + a + ',' + j);
+  if (!answer) return;
+  const values = answer.split(',').map(Number);
+  if (values.some((n) => n < 0) || values[0] + values[1] + values[2] !== 100) return notice('Split must contain non-negative values and total 100.');
+  await window.approveSale(reference, values[0], values[1], values[2]);
+};
+window.approveExpense = async (reference, allocation) => {
+  try { await api('approve_expense', { reference, allocation }); notice(reference + ' allocated to ' + allocation + '.'); await loadState(); }
+  catch (error) { notice('Server error: ' + error.message); }
+};
+window.correctExpense = async (reference, allocation) => {
+  const value = prompt('Final allocation: A, B, or overhead.', allocation);
+  if (!['A', 'B', 'overhead'].includes(value)) return notice('Use A, B, or overhead.');
+  await window.approveExpense(reference, value);
+};
+
+$('role').addEventListener('change', async (event) => { state.role = event.target.value; notice('Role changed to ' + state.role + '.'); await loadState(); });
+$('sale-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!isSalesperson()) return notice('Only salespeople may submit sales.');
+  const d = Object.fromEntries(new FormData(event.target));
+  const richard = Number(d.richard), anastasia = Number(d.anastasia), jean = Number(d.jean);
+  if (richard + anastasia + jean !== 100) return notice('Commission shares must total 100%.');
+  try { await api('sale', { reference: d.reference, customer: d.customer, project: d.project, description: d.description, amount: Number(d.amount), richard, anastasia, jean, source: 'website' }); event.target.reset(); notice(d.reference + ' saved.'); await loadState(); }
+  catch (error) { notice('Server error: ' + error.message); }
+});
+$('expense-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (state.role !== 'Kevin') return notice('Only Kevin may submit expenses.');
+  const d = Object.fromEntries(new FormData(event.target));
+  try { await api('expense', { reference: d.reference, description: d.description, category: d.category, amount: Number(d.amount), allocation: d.allocation, source: 'website' }); event.target.reset(); notice(d.reference + ' saved.'); await loadState(); }
+  catch (error) { notice('Server error: ' + error.message); }
+});
+$('refresh').addEventListener('click', loadState);
+$('load-tests').addEventListener('click', () => notice('Use the real forms to submit Test 1 and Test 2 data.'));
+loadState().catch((error) => notice('Could not load backend data: ' + error.message));

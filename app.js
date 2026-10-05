@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const API_URL = 'https://btyutrnvwhclnpjqduat.supabase.co/functions/v1/wedding-guests-api';
-const state = { role: 'Richard', sales: [], expenses: [], totals: {} };
+const state = { role: 'Richard', sales: [], expenses: [], totals: {}, scope: 'employee' };
 const money = (value) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 const notice = (text) => { $('notice').textContent = text; };
 
@@ -19,6 +19,7 @@ async function loadState() {
   state.sales = result.sales || [];
   state.expenses = result.expenses || [];
   state.totals = result.totals || {};
+  state.scope = result.scope || (state.role === 'Svetlana' ? 'manager' : 'employee');
   render();
 }
 
@@ -42,12 +43,17 @@ function expenseRecord(e) {
 }
 
 function render() {
-  const t = state.totals;
-  const metrics = [['Company result', t.company_result], ['Project A result', t.project_a_result], ['Project B result', t.project_b_result], ['Richard commission', t.richard_commission], ['Anastasia commission', t.anastasia_commission], ['Jean-Claude commission', t.jean_claude_commission]];
-  $('metrics').innerHTML = metrics.map((x) => '<div class="metric"><span>' + x[0] + '</span><strong>' + money(x[1]) + '</strong></div>').join('');
-  $('projects').innerHTML = '<div class="card project"><h2>Project A</h2><strong>Result: ' + money(t.project_a_result) + '</strong></div><div class="card project"><h2>Project B</h2><strong>Result: ' + money(t.project_b_result) + '</strong></div>';
-  $('sales').innerHTML = state.sales.length ? state.sales.map(saleRecord).join('') : '<p class="meta">No sales recorded.</p>';
-  $('expenses').innerHTML = state.expenses.length ? state.expenses.map(expenseRecord).join('') : '<p class="meta">No expenses recorded.</p>';
+  const t = state.totals || {};
+  if (state.scope === 'manager') {
+    const metrics = [['Company result', t.company_result], ['Project A result', t.project_a_result], ['Project B result', t.project_b_result], ['Richard commission', t.richard_commission], ['Anastasia commission', t.anastasia_commission], ['Jean-Claude commission', t.jean_claude_commission]];
+    $('metrics').innerHTML = metrics.map((x) => '<div class="metric"><span>' + x[0] + '</span><strong>' + money(x[1]) + '</strong></div>').join('');
+    $('projects').innerHTML = '<div class="card project"><h2>Project A</h2><strong>Result: ' + money(t.project_a_result) + '</strong></div><div class="card project"><h2>Project B</h2><strong>Result: ' + money(t.project_b_result) + '</strong></div>';
+  } else {
+    $('metrics').innerHTML = '<div class="metric"><span>PRIVATE EMPLOYEE VIEW</span><strong>Your permitted records only</strong></div>';
+    $('projects').innerHTML = '';
+  }
+  $('sales').innerHTML = state.sales.length ? state.sales.map(saleRecord).join('') : '<p class="meta">No permitted sales records.</p>';
+  $('expenses').innerHTML = state.expenses.length ? state.expenses.map(expenseRecord).join('') : '<p class="meta">No permitted expense records.</p>';
   $('sale-form').querySelector('button').disabled = !isSalesperson();
   $('expense-form').querySelector('button').disabled = state.role !== 'Kevin';
 }
